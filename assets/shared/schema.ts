@@ -1,4 +1,4 @@
-import { pgTable, text, integer, jsonb, serial, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, jsonb, serial, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -96,6 +96,8 @@ export const diagrams = pgTable("diagrams", {
   visibleRelations: text("visible_relations").array().notNull().default([
     "uses","triggers","flows","association","realization","composition","aggregation","assignment","access","influence"
   ]),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
 });
 
 export const chatMessages = pgTable("chat_messages", {
@@ -115,3 +117,17 @@ export type Diagram = typeof diagrams.$inferSelect;
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true });
 export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+
+export const customStyleSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  orgName: z.string().min(1),
+  primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+  accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+  bgColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+  textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+  borderColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Must be a valid hex color"),
+  fontFamily: z.string().min(1),
+  elementIcons: z.record(z.string()).optional().default({}),
+  isPreset: z.boolean().optional().default(false),
+});

@@ -1,9 +1,13 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
-import { insertDiagramSchema, insertChatMessageSchema } from "@shared/schema";
+import { insertDiagramSchema, insertChatMessageSchema, customStyleSchema } from "@shared/schema";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
+import rateLimit from "express-rate-limit";
+import multer from "multer";
+import path from "path";
+import fs from "fs/promises";
 
 // Simple chatbot: parse natural language commands and return diagram operations
 function processChatCommand(
@@ -239,7 +243,7 @@ ${text}
 JSON antwoord:`;
 
   const message = await client.messages.create({
-    model: "claude_sonnet_4_6",
+    model: "claude-3-5-sonnet-20241022",
     max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
   });
@@ -368,6 +372,48 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+const analyzeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: "Te veel analyseaanvragen. Probeer over een minuut opnieuw." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const uploadsDir = path.join(process.cwd(), "uploads");
+
+const fileStorage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      await fs.mkdir(uploadsDir, { recursive: true });
+      cb(null, uploadsDir);
+    } catch (error) {
+      cb(error as Error, uploadsDir);
+    }
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+
+const upload = multer({
+  storage: fileStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = /jpeg|jpg|png|gif|svg\+xml/;
+    const mimeType = allowedTypes.test(file.mimetype);
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+
+    if (mimeType && extname) {
+      return cb(null, true);
+    }
+    cb(new Error("Alleen afbeeldingen zijn toegestaan (jpg, png, gif, svg)"));
+  },
+});
+
 export async function registerRoutes(httpServer: Server, app: Express) {
   // GET all diagrams
   app.get("/api/diagrams", async (_req, res) => {
@@ -394,7 +440,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // PATCH update diagram
   app.patch("/api/diagrams/:id", async (req, res) => {
     const id = parseInt(req.params.id);
-    const diagram = await storage.updateDiagram(id, req.body);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+    const parsed = insertDiagramSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error });
+
+    const diagram = await storage.updateDiagram(id, parsed.data);
     if (!diagram) return res.status(404).json({ error: "Not found" });
     res.json(diagram);
   });
@@ -445,9 +496,13 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json(messages);
   });
 
-  // POST upload icon (stub: returns a placeholder URL)
-  app.post("/api/icons", async (req, res) => {
-    res.json({ url: "/placeholder-icon.svg", message: "Icon ontvangen (prototype: bestandsopslag niet geïmplementeerd)" });
+  // POST upload icon
+  app.post("/api/icons", upload.single("icon"), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: "Geen bestand geüpload" });
+    }
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({ url: fileUrl, message: "Icon succesvol geüpload" });
   });
 
   // --- Custom stijlen API ---
@@ -467,15 +522,17 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   // POST maak nieuwe custom stijl
   app.post("/api/custom-styles", async (req, res) => {
-    const data = req.body;
-    if (!data.id || !data.name) return res.status(400).json({ error: "id en name zijn verplicht" });
-    const style = await storage.createCustomStyle(data);
+    const parsed = customStyleSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error });
+    const style = await storage.createCustomStyle(parsed.data);
     res.status(201).json(style);
   });
 
   // PATCH update custom stijl
   app.patch("/api/custom-styles/:id", async (req, res) => {
-    const style = await storage.updateCustomStyle(req.params.id, req.body);
+    const parsed = customStyleSchema.partial().safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error });
+    const style = await storage.updateCustomStyle(req.params.id, parsed.data);
     if (!style) return res.status(404).json({ error: "Not found" });
     res.json(style);
   });
@@ -491,7 +548,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // POST /api/analyze-text
   // body: { text: string }
   // returns: { elements, relations, summary, confidence }
-  app.post("/api/analyze-text", async (req, res) => {
+  app.post("/api/analyze-text", analyzeLimiter, async (req, res) => {
     const { text } = req.body;
     if (!text || typeof text !== "string" || text.trim().length < 20) {
       return res.status(400).json({ error: "Geef minimaal 20 tekens tekst mee om te analyseren." });
