@@ -15,7 +15,7 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
-    emptyOutDir: true,
+    emptyOutDir: false,
     rollupOptions: {
       output: {
         manualChunks: {
