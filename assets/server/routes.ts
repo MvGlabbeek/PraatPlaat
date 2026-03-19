@@ -9,6 +9,21 @@ import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
 
+function serializeForJSON(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (obj instanceof Buffer) return obj.toString('base64');
+  if (obj instanceof Date) return obj.toISOString();
+  if (Array.isArray(obj)) return obj.map(serializeForJSON);
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = serializeForJSON(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
 // Simple chatbot: parse natural language commands and return diagram operations
 function processChatCommand(
   message: string,
@@ -418,7 +433,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // GET all diagrams
   app.get("/api/diagrams", async (_req, res) => {
     const list = await storage.getDiagrams();
-    res.json(JSON.parse(JSON.stringify(list)));
+    res.json(serializeForJSON(list));
   });
 
   // GET single diagram
@@ -426,7 +441,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const id = parseInt(req.params.id);
     const diagram = await storage.getDiagram(id);
     if (!diagram) return res.status(404).json({ error: "Not found" });
-    res.json(JSON.parse(JSON.stringify(diagram)));
+    res.json(serializeForJSON(diagram));
   });
 
   // POST create diagram
@@ -434,7 +449,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const parsed = insertDiagramSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error });
     const diagram = await storage.createDiagram(parsed.data);
-    res.status(201).json(JSON.parse(JSON.stringify(diagram)));
+    res.status(201).json(serializeForJSON(diagram));
   });
 
   // PATCH update diagram
@@ -447,7 +462,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
     const diagram = await storage.updateDiagram(id, parsed.data);
     if (!diagram) return res.status(404).json({ error: "Not found" });
-    res.json(JSON.parse(JSON.stringify(diagram)));
+    res.json(serializeForJSON(diagram));
   });
 
   // DELETE diagram
@@ -510,14 +525,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // GET alle custom stijlen
   app.get("/api/custom-styles", async (_req, res) => {
     const styles = await storage.getCustomStyles();
-    res.json(styles);
+    res.json(serializeForJSON(styles));
   });
 
   // GET enkele custom stijl
   app.get("/api/custom-styles/:id", async (req, res) => {
     const style = await storage.getCustomStyle(req.params.id);
     if (!style) return res.status(404).json({ error: "Not found" });
-    res.json(style);
+    res.json(serializeForJSON(style));
   });
 
   // POST maak nieuwe custom stijl
@@ -525,7 +540,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const parsed = customStyleSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error });
     const style = await storage.createCustomStyle(parsed.data);
-    res.status(201).json(style);
+    res.status(201).json(serializeForJSON(style));
   });
 
   // PATCH update custom stijl
@@ -534,7 +549,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (!parsed.success) return res.status(400).json({ error: parsed.error });
     const style = await storage.updateCustomStyle(req.params.id, parsed.data);
     if (!style) return res.status(404).json({ error: "Not found" });
-    res.json(style);
+    res.json(serializeForJSON(style));
   });
 
   // DELETE custom stijl (presets kunnen niet verwijderd worden)
