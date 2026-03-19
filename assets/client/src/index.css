@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Architecture tool: clean, precise, professional — slate-blue palette */
+    --background: 215 25% 97%;
+    --foreground: 215 25% 12%;
+    --card: 215 20% 98%;
+    --card-foreground: 215 25% 12%;
+    --popover: 215 20% 98%;
+    --popover-foreground: 215 25% 12%;
+    --primary: 217 91% 40%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 20% 92%;
+    --secondary-foreground: 215 25% 25%;
+    --muted: 215 15% 93%;
+    --muted-foreground: 215 15% 50%;
+    --accent: 217 80% 94%;
+    --accent-foreground: 217 91% 30%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 15% 86%;
+    --input: 215 15% 86%;
+    --ring: 217 91% 40%;
+    --radius: 0.5rem;
+
+    --font-body: 'DM Sans', 'Inter', system-ui, sans-serif;
+    --font-display: 'Inter', 'DM Sans', system-ui, sans-serif;
+    --font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
+    --font-serif: Georgia, serif;
+    --font-mono: 'Consolas', monospace;
+  }
+
+  .dark {
+    --background: 215 30% 9%;
+    --foreground: 215 15% 88%;
+    --card: 215 28% 11%;
+    --card-foreground: 215 15% 88%;
+    --popover: 215 28% 11%;
+    --popover-foreground: 215 15% 88%;
+    --primary: 217 85% 60%;
+    --primary-foreground: 215 30% 9%;
+    --secondary: 215 25% 18%;
+    --secondary-foreground: 215 15% 80%;
+    --muted: 215 25% 16%;
+    --muted-foreground: 215 15% 55%;
+    --accent: 217 40% 22%;
+    --accent-foreground: 217 85% 70%;
+    --destructive: 0 72% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 215 20% 22%;
+    --input: 215 20% 22%;
+    --ring: 217 85% 60%;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* ReactFlow overrides */
+.react-flow__background {
+  background-color: hsl(var(--background));
+}
+.react-flow__controls {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.react-flow__controls button {
+  background: hsl(var(--card));
+  border: none;
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+.react-flow__controls button:hover {
+  background: hsl(var(--accent));
+}
+.react-flow__minimap {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+}
+.react-flow__edge-path {
+  stroke-width: 2;
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+}
+.react-flow__handle {
+  background: hsl(var(--primary));
+  width: 10px;
+  height: 10px;
+  border: 2px solid white;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }
+
+/* Chat styling */
+.chat-message-user {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.chat-message-assistant {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+/* Node animations */
+@keyframes node-appear {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.praatplaat-node {
+  animation: node-appear 0.2s ease-out;
+}
+
+/* Whiteboard papier textuur subtiel */
+.whiteboard-bg {
+  background-image: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 31px,
+      rgba(0,0,0,0.03) 31px,
+      rgba(0,0,0,0.03) 32px
+    );
+}
+
+/* Handgeschreven font */
+.font-sketch {
+  font-family: 'Patrick Hand', 'Caveat', cursive;
+}
+.font-stift {
+  font-family: 'Caveat', 'Patrick Hand', cursive;
+}
+
+/* Whiteboard node: geen schaduw, ruwe feel */
+.react-flow__node.whiteboard-node-style {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Style badges */
+.style-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
