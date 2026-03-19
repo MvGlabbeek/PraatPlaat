@@ -104,7 +104,10 @@ export default function CustomStyleEditor({ editing, onClose, onSaved }: Props) 
 
   // Bulk upload: probeer bestandsnamen te matchen met elementtypes
   const handleBulkUpload = async (files: FileList) => {
-    const newIcons: Record<string, string> = { ...form.elementIcons };
+    const newIcons: Record<string, string> = {};
+    Object.entries(form.elementIcons || {}).forEach(([k, v]) => {
+      if (v) newIcons[k] = v;
+    });
     const matched: string[] = [];
     const unmatched: string[] = [];
 
@@ -161,7 +164,7 @@ export default function CustomStyleEditor({ editing, onClose, onSaved }: Props) 
     }
   };
 
-  const iconCount = Object.values(form.elementIcons).filter(Boolean).length;
+  const iconCount = Object.values(form.elementIcons || {}).filter(Boolean).length;
 
   return (
     <div

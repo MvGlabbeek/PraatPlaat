@@ -145,7 +145,7 @@ export default function StyleSelector({ activeStyle, onStyleChange }: StyleSelec
                   <div className="flex items-center gap-1">
                     <span className="text-xs font-semibold truncate">{cs.name}</span>
                     {cs.isPreset && (
-                      <Star size={9} className="text-yellow-500 flex-shrink-0" title="Ingebouwde preset" />
+                      <Star size={9} className="text-yellow-500 flex-shrink-0" />
                     )}
                   </div>
                   <div className="text-[10px] text-muted-foreground truncate">

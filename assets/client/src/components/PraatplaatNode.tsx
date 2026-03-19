@@ -44,7 +44,7 @@ interface PraatplaatNodeData extends CanvasElement {
 }
 
 const PraatplaatNode = memo(({ data, selected }: NodeProps) => {
-  const nodeData = data as PraatplaatNodeData;
+  const nodeData = data as unknown as PraatplaatNodeData;
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(nodeData.label);
 

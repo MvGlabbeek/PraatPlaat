@@ -102,7 +102,7 @@ function SketchBorder({ w, h, style }: { w: number; h: number; style: VisualStyl
 }
 
 const WhiteboardNode = memo(({ data, selected }: NodeProps) => {
-  const nodeData = data as WhiteboardNodeData;
+  const nodeData = data as unknown as WhiteboardNodeData;
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(nodeData.label);
 

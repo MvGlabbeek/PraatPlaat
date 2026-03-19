@@ -107,15 +107,15 @@ class PostgresStorage implements IStorage {
   }
 
   async getCustomStyles(): Promise<CustomStyle[]> {
-    const results = await db.execute<CustomStyle>(sql`SELECT * FROM custom_styles`);
-    return deepClone(results.rows);
+    const results: any = await db.execute(sql`SELECT * FROM custom_styles`);
+    return deepClone(results.rows || []);
   }
 
   async getCustomStyle(id: string): Promise<CustomStyle | undefined> {
-    const results = await db.execute<CustomStyle>(
+    const results: any = await db.execute(
       sql`SELECT * FROM custom_styles WHERE id = ${id}`
     );
-    return deepClone(results.rows[0]);
+    return deepClone(results.rows?.[0]);
   }
 
   async createCustomStyle(data: CustomStyle): Promise<CustomStyle> {
