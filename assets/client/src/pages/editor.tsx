@@ -1,25 +1,22 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ReactFlowProvider } from "@xyflow/react";
 import DiagramCanvas from "@/components/DiagramCanvas";
 import ElementPalette from "@/components/ElementPalette";
-import RelationPanel from "@/components/RelationPanel";
-import StyleSelector from "@/components/StyleSelector";
-import ChatPanel from "@/components/ChatPanel";
-import ElementPropertiesPanel from "@/components/ElementPropertiesPanel";
-import ExportPanel from "@/components/ExportPanel";
-import DiagramsList from "@/components/DiagramsList";
-import ImportPanel from "@/components/ImportPanel";
-import TextAnalyzePanel from "@/components/TextAnalyzePanel";
+
+const RelationPanel = lazy(() => import("@/components/RelationPanel"));
+const StyleSelector = lazy(() => import("@/components/StyleSelector"));
+const ChatPanel = lazy(() => import("@/components/ChatPanel"));
+const ElementPropertiesPanel = lazy(() => import("@/components/ElementPropertiesPanel"));
+const ExportPanel = lazy(() => import("@/components/ExportPanel"));
+const DiagramsList = lazy(() => import("@/components/DiagramsList"));
+const ImportPanel = lazy(() => import("@/components/ImportPanel"));
+const TextAnalyzePanel = lazy(() => import("@/components/TextAnalyzePanel"));
 import type { Diagram, DiagramData, CanvasElement, CanvasRelation, ElementType, VisualStyle, CustomStyle } from "@shared/schema";
 import { VISUAL_STYLES, getStyleConfig } from "@/lib/elementConfig";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Layers, MessageSquare, Download, Settings, PanelLeft,
-  Save, RotateCcw, Pencil, List, ChevronLeft, ChevronRight,
-  Upload, Wand2,
-} from "lucide-react";
+import { Layers, MessageSquare, Download, Settings, PanelLeft, Save, RotateCcw, Pencil, List, ChevronLeft, ChevronRight, Upload, Wand as Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger
@@ -376,41 +373,43 @@ export default function EditorPage() {
             {/* Panel content */}
             {leftOpen && (
               <div className="w-52 overflow-y-auto">
-                {leftTab === "diagrams" && (
-                  <DiagramsList
-                    activeDiagramId={activeDiagramId}
-                    onSelectDiagram={handleDiagramSelect}
-                  />
-                )}
-                {leftTab === "elements" && (
-                  <ElementPalette
-                    visibleTypes={visibleTypes}
-                    onToggleType={handleToggleType}
-                    activeStyle={activeStyle}
-                    onAddElement={handleAddElement}
-                  />
-                )}
-                {leftTab === "relations" && (
-                  <RelationPanel
-                    visibleRelations={visibleRelations}
-                    onToggleRelation={handleToggleRelation}
-                  />
-                )}
-                {leftTab === "style" && (
-                  <StyleSelector
-                    activeStyle={activeStyle}
-                    onStyleChange={handleStyleChange}
-                  />
-                )}
-                {leftTab === "import" && (
-                  <ImportPanel onImport={handleImport} />
-                )}
-                {leftTab === "export" && diagram && (
-                  <ExportPanel
-                    diagramName={diagram.name}
-                    diagramData={effectiveData}
-                  />
-                )}
+                <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Laden...</div>}>
+                  {leftTab === "diagrams" && (
+                    <DiagramsList
+                      activeDiagramId={activeDiagramId}
+                      onSelectDiagram={handleDiagramSelect}
+                    />
+                  )}
+                  {leftTab === "elements" && (
+                    <ElementPalette
+                      visibleTypes={visibleTypes}
+                      onToggleType={handleToggleType}
+                      activeStyle={activeStyle}
+                      onAddElement={handleAddElement}
+                    />
+                  )}
+                  {leftTab === "relations" && (
+                    <RelationPanel
+                      visibleRelations={visibleRelations}
+                      onToggleRelation={handleToggleRelation}
+                    />
+                  )}
+                  {leftTab === "style" && (
+                    <StyleSelector
+                      activeStyle={activeStyle}
+                      onStyleChange={handleStyleChange}
+                    />
+                  )}
+                  {leftTab === "import" && (
+                    <ImportPanel onImport={handleImport} />
+                  )}
+                  {leftTab === "export" && diagram && (
+                    <ExportPanel
+                      diagramName={diagram.name}
+                      diagramData={effectiveData}
+                    />
+                  )}
+                </Suspense>
               </div>
             )}
           </div>
@@ -498,33 +497,35 @@ export default function EditorPage() {
                 </div>
 
                 <div className="flex-1 min-h-0 overflow-hidden">
-                  {rightTab === "chat" && diagram && (
-                    <ChatPanel
-                      diagramId={activeDiagramId}
-                      onDiagramDataChange={handleChatOps}
-                    />
-                  )}
-                  {rightTab === "analyze" && diagram && (
-                    <TextAnalyzePanel onApply={handleTextAnalysis} />
-                  )}
-                  {rightTab === "properties" && selectedElement ? (
-                    <ElementPropertiesPanel
-                      element={selectedElement}
-                      activeStyle={activeStyle}
-                      onUpdate={handleUpdateElement}
-                      onDelete={handleDeleteElement}
-                      onClose={() => setSelectedElement(null)}
-                    />
-                  ) : rightTab === "properties" && (
-                    <div className="h-full flex items-center justify-center p-4 text-center">
-                      <div className="space-y-2">
-                        <Settings size={24} className="mx-auto text-muted-foreground/30" />
-                        <p className="text-xs text-muted-foreground">
-                          Klik op een element om de eigenschappen te bewerken.
-                        </p>
+                  <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Laden...</div>}>
+                    {rightTab === "chat" && diagram && (
+                      <ChatPanel
+                        diagramId={activeDiagramId}
+                        onDiagramDataChange={handleChatOps}
+                      />
+                    )}
+                    {rightTab === "analyze" && diagram && (
+                      <TextAnalyzePanel onApply={handleTextAnalysis} />
+                    )}
+                    {rightTab === "properties" && selectedElement ? (
+                      <ElementPropertiesPanel
+                        element={selectedElement}
+                        activeStyle={activeStyle}
+                        onUpdate={handleUpdateElement}
+                        onDelete={handleDeleteElement}
+                        onClose={() => setSelectedElement(null)}
+                      />
+                    ) : rightTab === "properties" && (
+                      <div className="h-full flex items-center justify-center p-4 text-center">
+                        <div className="space-y-2">
+                          <Settings size={24} className="mx-auto text-muted-foreground/30" />
+                          <p className="text-xs text-muted-foreground">
+                            Klik op een element om de eigenschappen te bewerken.
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </Suspense>
                 </div>
               </div>
             )}
