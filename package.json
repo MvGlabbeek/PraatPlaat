@@ -1,0 +1,16 @@
+{
+  "name": "praatplaat-diagram-editor",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "cd assets && npm run dev",
+    "build": "cd assets && npm run build",
+    "start": "cd assets && npm run start",
+    "check": "cd assets && npm run check",
+    "db:push": "cd assets && npm run db:push"
+  },
+  "workspaces": [
+    "assets"
+  ]
+}
