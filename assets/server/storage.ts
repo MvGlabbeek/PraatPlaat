@@ -8,6 +8,21 @@ import {
 import { db } from "./db";
 import { eq, sql } from "drizzle-orm";
 
+function deepClone(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (obj instanceof Buffer) return obj.toString('utf-8');
+  if (obj instanceof Date) return obj.toISOString();
+  if (Array.isArray(obj)) return obj.map(deepClone);
+  if (typeof obj === 'object') {
+    const result: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      result[key] = deepClone(value);
+    }
+    return result;
+  }
+  return obj;
+}
+
 export interface IStorage {
   // Diagrams
   getDiagrams(): Promise<Diagram[]>;
@@ -46,17 +61,18 @@ const DIGIGO_PRESET: CustomStyle = {
 
 class PostgresStorage implements IStorage {
   async getDiagrams(): Promise<Diagram[]> {
-    return await db.select().from(diagrams);
+    const results = await db.select().from(diagrams);
+    return deepClone(results);
   }
 
   async getDiagram(id: number): Promise<Diagram | undefined> {
     const results = await db.select().from(diagrams).where(eq(diagrams.id, id));
-    return results[0];
+    return deepClone(results[0]);
   }
 
   async createDiagram(data: InsertDiagram): Promise<Diagram> {
     const results = await db.insert(diagrams).values(data).returning();
-    return results[0];
+    return deepClone(results[0]);
   }
 
   async updateDiagram(id: number, data: Partial<InsertDiagram>): Promise<Diagram | undefined> {
@@ -65,7 +81,7 @@ class PostgresStorage implements IStorage {
       .set({ ...data, updated_at: sql`now()` })
       .where(eq(diagrams.id, id))
       .returning();
-    return results[0];
+    return deepClone(results[0]);
   }
 
   async deleteDiagram(id: number): Promise<boolean> {
@@ -74,15 +90,16 @@ class PostgresStorage implements IStorage {
   }
 
   async getChatMessages(diagramId: number): Promise<ChatMessage[]> {
-    return await db
+    const results = await db
       .select()
       .from(chatMessages)
       .where(eq(chatMessages.diagramId, diagramId));
+    return deepClone(results);
   }
 
   async addChatMessage(data: InsertChatMessage): Promise<ChatMessage> {
     const results = await db.insert(chatMessages).values(data).returning();
-    return results[0];
+    return deepClone(results[0]);
   }
 
   async clearChatMessages(diagramId: number): Promise<void> {
@@ -91,14 +108,14 @@ class PostgresStorage implements IStorage {
 
   async getCustomStyles(): Promise<CustomStyle[]> {
     const results = await db.execute<CustomStyle>(sql`SELECT * FROM custom_styles`);
-    return results.rows as CustomStyle[];
+    return deepClone(results.rows);
   }
 
   async getCustomStyle(id: string): Promise<CustomStyle | undefined> {
     const results = await db.execute<CustomStyle>(
       sql`SELECT * FROM custom_styles WHERE id = ${id}`
     );
-    return results.rows[0] as CustomStyle | undefined;
+    return deepClone(results.rows[0]);
   }
 
   async createCustomStyle(data: CustomStyle): Promise<CustomStyle> {
