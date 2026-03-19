@@ -418,7 +418,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // GET all diagrams
   app.get("/api/diagrams", async (_req, res) => {
     const list = await storage.getDiagrams();
-    res.json(list);
+    res.json(JSON.parse(JSON.stringify(list)));
   });
 
   // GET single diagram
@@ -426,7 +426,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const id = parseInt(req.params.id);
     const diagram = await storage.getDiagram(id);
     if (!diagram) return res.status(404).json({ error: "Not found" });
-    res.json(diagram);
+    res.json(JSON.parse(JSON.stringify(diagram)));
   });
 
   // POST create diagram
@@ -434,7 +434,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const parsed = insertDiagramSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error });
     const diagram = await storage.createDiagram(parsed.data);
-    res.status(201).json(diagram);
+    res.status(201).json(JSON.parse(JSON.stringify(diagram)));
   });
 
   // PATCH update diagram
@@ -447,7 +447,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
     const diagram = await storage.updateDiagram(id, parsed.data);
     if (!diagram) return res.status(404).json({ error: "Not found" });
-    res.json(diagram);
+    res.json(JSON.parse(JSON.stringify(diagram)));
   });
 
   // DELETE diagram
