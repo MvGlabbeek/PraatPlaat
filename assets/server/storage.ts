@@ -158,3 +158,120 @@ class PostgresStorage implements IStorage {
 }
 
 export const storage = new PostgresStorage();
+
+// Initialize database with default data if empty
+export async function initializeDatabase() {
+  try {
+    const diagrams = await storage.getDiagrams();
+
+    // Seed default diagram if none exists
+    if (diagrams.length === 0) {
+      await storage.createDiagram({
+        name: "Demo: Digitaal Loket",
+        description: "Voorbeeld praatplaat van een digitaal loket voor burgers",
+        style: "corporate",
+        data: {
+          elements: [
+            {
+              id: "e1",
+              type: "actor",
+              label: "Burger",
+              style: "corporate",
+              position: { x: 80, y: 200 },
+              description: "Eindgebruiker van het loket"
+            },
+            {
+              id: "e2",
+              type: "application",
+              label: "Digitaal Loket",
+              style: "corporate",
+              position: { x: 300, y: 200 },
+              description: "Webportaal voor aanvragen"
+            },
+            {
+              id: "e3",
+              type: "process",
+              label: "Aanvraag verwerken",
+              style: "corporate",
+              position: { x: 520, y: 200 },
+              description: "Backoffice verwerking"
+            },
+            {
+              id: "e4",
+              type: "system",
+              label: "GBA Koppeling",
+              style: "corporate",
+              position: { x: 520, y: 380 },
+              description: "Basisregistratie Personen"
+            },
+            {
+              id: "e5",
+              type: "data",
+              label: "Aanvraagdossier",
+              style: "corporate",
+              position: { x: 300, y: 380 },
+              description: "Opgeslagen aanvragen"
+            },
+            {
+              id: "e6",
+              type: "actor",
+              label: "Behandelaar",
+              style: "corporate",
+              position: { x: 740, y: 200 },
+              description: "Gemeentelijk medewerker"
+            }
+          ],
+          relations: [
+            {
+              id: "r1",
+              type: "uses",
+              label: "dient in via",
+              sourceId: "e1",
+              targetId: "e2"
+            },
+            {
+              id: "r2",
+              type: "triggers",
+              label: "start",
+              sourceId: "e2",
+              targetId: "e3"
+            },
+            {
+              id: "r3",
+              type: "uses",
+              label: "raadpleegt",
+              sourceId: "e3",
+              targetId: "e4"
+            },
+            {
+              id: "r4",
+              type: "flows",
+              label: "slaat op",
+              sourceId: "e2",
+              targetId: "e5"
+            },
+            {
+              id: "r5",
+              type: "assignment",
+              label: "behandelt",
+              sourceId: "e6",
+              targetId: "e3"
+            }
+          ]
+        },
+        visibleTypes: ["actor","process","application","data","transaction","system","event","decision","service","infrastructure"],
+        visibleRelations: ["uses","triggers","flows","association","realization","composition","aggregation","assignment","access","influence"],
+      });
+      console.log("✓ Default diagram seeded");
+    }
+
+    // Seed digiGO preset if it doesn't exist
+    const existingStyle = await storage.getCustomStyle("digigo");
+    if (!existingStyle) {
+      await storage.createCustomStyle(DIGIGO_PRESET);
+      console.log("✓ digiGO preset seeded");
+    }
+  } catch (error) {
+    console.error("Database initialization error:", error);
+  }
+}

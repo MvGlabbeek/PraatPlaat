@@ -62,6 +62,10 @@ app.use((req, res, next) => {
 (async () => {
   app.use("/uploads", express.static("uploads"));
 
+  // Initialize database with seed data
+  const { initializeDatabase } = await import("./storage");
+  await initializeDatabase();
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
