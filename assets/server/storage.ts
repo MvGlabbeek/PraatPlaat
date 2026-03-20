@@ -167,8 +167,8 @@ export async function initializeDatabase() {
     // Seed default diagram if none exists
     if (diagrams.length === 0) {
       await storage.createDiagram({
-        name: "Demo: Digitaal Loket",
-        description: "Voorbeeld praatplaat van een digitaal loket voor burgers",
+        name: "🎨 Welkom bij Praatplaat Studio!",
+        description: "Interactieve demo - Probeer elementen toe te voegen, relaties te tekenen en stijlen te wijzigen. Klik op Assistent voor natuurlijke taal commando's!",
         style: "corporate",
         data: {
           elements: [
@@ -177,48 +177,64 @@ export async function initializeDatabase() {
               type: "actor",
               label: "Burger",
               style: "corporate",
-              position: { x: 80, y: 200 },
-              description: "Eindgebruiker van het loket"
+              position: { x: 100, y: 150 },
+              description: "Eindgebruiker die een aanvraag indient"
             },
             {
               id: "e2",
               type: "application",
               label: "Digitaal Loket",
               style: "corporate",
-              position: { x: 300, y: 200 },
-              description: "Webportaal voor aanvragen"
+              position: { x: 350, y: 150 },
+              description: "Online portaal voor burgers"
             },
             {
               id: "e3",
               type: "process",
               label: "Aanvraag verwerken",
               style: "corporate",
-              position: { x: 520, y: 200 },
-              description: "Backoffice verwerking"
+              position: { x: 600, y: 150 },
+              description: "Behandel en beoordeel aanvraag"
             },
             {
               id: "e4",
-              type: "system",
-              label: "GBA Koppeling",
+              type: "actor",
+              label: "Behandelaar",
               style: "corporate",
-              position: { x: 520, y: 380 },
-              description: "Basisregistratie Personen"
+              position: { x: 850, y: 150 },
+              description: "Gemeentelijk medewerker"
             },
             {
               id: "e5",
               type: "data",
               label: "Aanvraagdossier",
               style: "corporate",
-              position: { x: 300, y: 380 },
-              description: "Opgeslagen aanvragen"
+              position: { x: 350, y: 350 },
+              description: "Opgeslagen aanvraaggegevens"
             },
             {
               id: "e6",
-              type: "actor",
-              label: "Behandelaar",
+              type: "system",
+              label: "GBA Koppeling",
               style: "corporate",
-              position: { x: 740, y: 200 },
-              description: "Gemeentelijk medewerker"
+              position: { x: 600, y: 350 },
+              description: "Basisregistratie Personen verificatie"
+            },
+            {
+              id: "e7",
+              type: "service",
+              label: "Notificatiedienst",
+              style: "corporate",
+              position: { x: 100, y: 350 },
+              description: "Verstuur berichten naar burger"
+            },
+            {
+              id: "e8",
+              type: "decision",
+              label: "Goedkeuren?",
+              style: "corporate",
+              position: { x: 850, y: 350 },
+              description: "Beslispunt: wel/niet goedkeuren"
             }
           ],
           relations: [
@@ -238,31 +254,52 @@ export async function initializeDatabase() {
             },
             {
               id: "r3",
-              type: "uses",
-              label: "raadpleegt",
-              sourceId: "e3",
-              targetId: "e4"
+              type: "assignment",
+              label: "behandelt",
+              sourceId: "e4",
+              targetId: "e3"
             },
             {
               id: "r4",
               type: "flows",
-              label: "slaat op",
+              label: "slaat op in",
               sourceId: "e2",
               targetId: "e5"
             },
             {
               id: "r5",
-              type: "assignment",
-              label: "behandelt",
-              sourceId: "e6",
-              targetId: "e3"
+              type: "uses",
+              label: "raadpleegt",
+              sourceId: "e3",
+              targetId: "e6"
+            },
+            {
+              id: "r6",
+              type: "flows",
+              label: "leidt tot",
+              sourceId: "e3",
+              targetId: "e8"
+            },
+            {
+              id: "r7",
+              type: "triggers",
+              label: "verstuurt via",
+              sourceId: "e8",
+              targetId: "e7"
+            },
+            {
+              id: "r8",
+              type: "flows",
+              label: "ontvangt van",
+              sourceId: "e7",
+              targetId: "e1"
             }
           ]
         },
         visibleTypes: ["actor","process","application","data","transaction","system","event","decision","service","infrastructure"],
         visibleRelations: ["uses","triggers","flows","association","realization","composition","aggregation","assignment","access","influence"],
       });
-      console.log("✓ Default diagram seeded");
+      console.log("✓ Demo praatplaat seeded");
     }
 
     // Seed digiGO preset if it doesn't exist
