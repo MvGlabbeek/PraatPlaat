@@ -1,42 +1,22 @@
-import {
-  diagrams, chatMessages,
-  type Diagram, type InsertDiagram,
-  type ChatMessage, type InsertChatMessage,
-  type DiagramData,
-  type CustomStyle
+import { supabase } from "./db";
+import type {
+  Diagram,
+  InsertDiagram,
+  ChatMessage,
+  InsertChatMessage,
+  DiagramData,
+  CustomStyle,
 } from "@shared/schema";
-import { db } from "./db";
-import { eq, sql } from "drizzle-orm";
-
-function deepClone(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
-  if (obj instanceof Buffer) return obj.toString('utf-8');
-  if (obj instanceof Date) return obj.toISOString();
-  if (Array.isArray(obj)) return obj.map(deepClone);
-  if (typeof obj === 'object') {
-    const result: any = {};
-    for (const [key, value] of Object.entries(obj)) {
-      result[key] = deepClone(value);
-    }
-    return result;
-  }
-  return obj;
-}
 
 export interface IStorage {
-  // Diagrams
   getDiagrams(): Promise<Diagram[]>;
   getDiagram(id: number): Promise<Diagram | undefined>;
   createDiagram(data: InsertDiagram): Promise<Diagram>;
   updateDiagram(id: number, data: Partial<InsertDiagram>): Promise<Diagram | undefined>;
   deleteDiagram(id: number): Promise<boolean>;
-
-  // Chat messages
   getChatMessages(diagramId: number): Promise<ChatMessage[]>;
   addChatMessage(data: InsertChatMessage): Promise<ChatMessage>;
   clearChatMessages(diagramId: number): Promise<void>;
-
-  // Custom stijlen
   getCustomStyles(): Promise<CustomStyle[]>;
   getCustomStyle(id: string): Promise<CustomStyle | undefined>;
   createCustomStyle(data: CustomStyle): Promise<CustomStyle>;
@@ -44,7 +24,52 @@ export interface IStorage {
   deleteCustomStyle(id: string): Promise<boolean>;
 }
 
-// digiGO preset
+function rowToDiagram(row: any): Diagram {
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description ?? null,
+    style: row.style ?? "corporate",
+    data: row.data ?? { elements: [], relations: [] },
+    visibleTypes: row.visible_types ?? [
+      "actor","process","application","data","transaction","system",
+      "event","decision","service","infrastructure",
+    ],
+    visibleRelations: row.visible_relations ?? [
+      "uses","triggers","flows","association","realization","composition",
+      "aggregation","assignment","access","influence",
+    ],
+    created_at: row.created_at ? new Date(row.created_at) : null,
+    updated_at: row.updated_at ? new Date(row.updated_at) : null,
+  };
+}
+
+function rowToStyle(row: any): CustomStyle {
+  return {
+    id: row.id,
+    name: row.name,
+    orgName: row.org_name,
+    primaryColor: row.primary_color,
+    accentColor: row.accent_color,
+    bgColor: row.bg_color,
+    textColor: row.text_color,
+    borderColor: row.border_color,
+    fontFamily: row.font_family,
+    elementIcons: row.element_icons ?? {},
+    isPreset: row.is_preset ?? false,
+  };
+}
+
+function rowToChatMessage(row: any): ChatMessage {
+  return {
+    id: row.id,
+    diagramId: row.diagram_id,
+    role: row.role,
+    content: row.content,
+    timestamp: Number(row.timestamp),
+  };
+}
+
 const DIGIGO_PRESET: CustomStyle = {
   id: "digigo",
   name: "digiGO",
@@ -59,256 +84,209 @@ const DIGIGO_PRESET: CustomStyle = {
   isPreset: true,
 };
 
-class PostgresStorage implements IStorage {
+const DEMO_DIAGRAM: InsertDiagram = {
+  name: "Demo: Digitaal Loket",
+  description: "Voorbeeldpraatplaat – klik elementen aan, versleep ze, teken relaties, wissel van stijl. Gebruik de Assistent rechts voor opdrachten in gewone taal.",
+  style: "corporate",
+  visibleTypes: ["actor","process","application","data","transaction","system","event","decision","service","infrastructure"],
+  visibleRelations: ["uses","triggers","flows","association","realization","composition","aggregation","assignment","access","influence"],
+  data: {
+    elements: [
+      { id: "e1", type: "actor", label: "Burger", style: "corporate", position: { x: 100, y: 140 }, description: "Eindgebruiker die een aanvraag indient" },
+      { id: "e2", type: "application", label: "Digitaal Loket", style: "corporate", position: { x: 360, y: 140 }, description: "Online portaal voor burgers" },
+      { id: "e3", type: "process", label: "Aanvraag verwerken", style: "corporate", position: { x: 620, y: 140 }, description: "Behandel en beoordeel de aanvraag" },
+      { id: "e4", type: "actor", label: "Behandelaar", style: "corporate", position: { x: 880, y: 140 }, description: "Gemeentelijk medewerker" },
+      { id: "e5", type: "data", label: "Aanvraagdossier", style: "corporate", position: { x: 360, y: 360 }, description: "Opgeslagen aanvraaggegevens" },
+      { id: "e6", type: "system", label: "GBA Koppeling", style: "corporate", position: { x: 620, y: 360 }, description: "Basisregistratie Personen" },
+      { id: "e7", type: "service", label: "Notificatiedienst", style: "corporate", position: { x: 100, y: 360 }, description: "Verstuurt berichten naar burger" },
+      { id: "e8", type: "decision", label: "Goedkeuren?", style: "corporate", position: { x: 880, y: 360 }, description: "Beslispunt: goedkeuren of afwijzen" },
+    ],
+    relations: [
+      { id: "r1", type: "uses", label: "dient in via", sourceId: "e1", targetId: "e2" },
+      { id: "r2", type: "triggers", label: "start", sourceId: "e2", targetId: "e3" },
+      { id: "r3", type: "assignment", label: "behandelt", sourceId: "e4", targetId: "e3" },
+      { id: "r4", type: "flows", label: "slaat op in", sourceId: "e2", targetId: "e5" },
+      { id: "r5", type: "uses", label: "raadpleegt", sourceId: "e3", targetId: "e6" },
+      { id: "r6", type: "flows", label: "leidt tot", sourceId: "e3", targetId: "e8" },
+      { id: "r7", type: "triggers", label: "verstuurt via", sourceId: "e8", targetId: "e7" },
+      { id: "r8", type: "flows", label: "ontvangt bericht", sourceId: "e7", targetId: "e1" },
+    ],
+  },
+};
+
+class SupabaseStorage implements IStorage {
   async getDiagrams(): Promise<Diagram[]> {
-    const results = await db.select().from(diagrams);
-    return deepClone(results);
+    const { data, error } = await supabase
+      .from("diagrams")
+      .select("*")
+      .order("id", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(rowToDiagram);
   }
 
   async getDiagram(id: number): Promise<Diagram | undefined> {
-    const results = await db.select().from(diagrams).where(eq(diagrams.id, id));
-    return deepClone(results[0]);
+    const { data, error } = await supabase
+      .from("diagrams")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? rowToDiagram(data) : undefined;
   }
 
-  async createDiagram(data: InsertDiagram): Promise<Diagram> {
-    const results = await db.insert(diagrams).values(data).returning();
-    return deepClone(results[0]);
+  async createDiagram(input: InsertDiagram): Promise<Diagram> {
+    const DEFAULT_TYPES = ["actor","process","application","data","transaction","system","event","decision","service","infrastructure"];
+    const DEFAULT_RELS = ["uses","triggers","flows","association","realization","composition","aggregation","assignment","access","influence"];
+    const payload: any = {
+      name: input.name,
+      description: input.description ?? null,
+      style: input.style ?? "corporate",
+      data: input.data,
+      visible_types: input.visibleTypes ?? DEFAULT_TYPES,
+      visible_relations: input.visibleRelations ?? DEFAULT_RELS,
+    };
+    const { data, error } = await supabase
+      .from("diagrams")
+      .insert(payload)
+      .select()
+      .single();
+    if (error) throw error;
+    return rowToDiagram(data);
   }
 
-  async updateDiagram(id: number, data: Partial<InsertDiagram>): Promise<Diagram | undefined> {
-    const results = await db
-      .update(diagrams)
-      .set({ ...data, updated_at: sql`now()` })
-      .where(eq(diagrams.id, id))
-      .returning();
-    return deepClone(results[0]);
+  async updateDiagram(id: number, input: Partial<InsertDiagram>): Promise<Diagram | undefined> {
+    const payload: any = {};
+    if (input.name !== undefined) payload.name = input.name;
+    if (input.description !== undefined) payload.description = input.description;
+    if (input.style !== undefined) payload.style = input.style;
+    if (input.data !== undefined) payload.data = input.data;
+    if (input.visibleTypes !== undefined) payload.visible_types = input.visibleTypes;
+    if (input.visibleRelations !== undefined) payload.visible_relations = input.visibleRelations;
+    payload.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from("diagrams")
+      .update(payload)
+      .eq("id", id)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    return data ? rowToDiagram(data) : undefined;
   }
 
   async deleteDiagram(id: number): Promise<boolean> {
-    const results = await db.delete(diagrams).where(eq(diagrams.id, id)).returning();
-    return results.length > 0;
+    const { error, count } = await supabase
+      .from("diagrams")
+      .delete({ count: "exact" })
+      .eq("id", id);
+    if (error) throw error;
+    return (count ?? 0) > 0;
   }
 
   async getChatMessages(diagramId: number): Promise<ChatMessage[]> {
-    const results = await db
-      .select()
-      .from(chatMessages)
-      .where(eq(chatMessages.diagramId, diagramId));
-    return deepClone(results);
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("diagram_id", diagramId)
+      .order("id", { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(rowToChatMessage);
   }
 
-  async addChatMessage(data: InsertChatMessage): Promise<ChatMessage> {
-    const results = await db.insert(chatMessages).values(data).returning();
-    return deepClone(results[0]);
+  async addChatMessage(input: InsertChatMessage): Promise<ChatMessage> {
+    const payload = {
+      diagram_id: input.diagramId,
+      role: input.role,
+      content: input.content,
+      timestamp: input.timestamp,
+    };
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .insert(payload)
+      .select()
+      .single();
+    if (error) throw error;
+    return rowToChatMessage(data);
   }
 
   async clearChatMessages(diagramId: number): Promise<void> {
-    await db.delete(chatMessages).where(eq(chatMessages.diagramId, diagramId));
+    const { error } = await supabase
+      .from("chat_messages")
+      .delete()
+      .eq("diagram_id", diagramId);
+    if (error) throw error;
   }
 
   async getCustomStyles(): Promise<CustomStyle[]> {
-    const results: any = await db.execute(sql`SELECT * FROM custom_styles`);
-    return deepClone(results.rows || []);
+    const { data, error } = await supabase
+      .from("custom_styles")
+      .select("*")
+      .order("id");
+    if (error) throw error;
+    return (data ?? []).map(rowToStyle);
   }
 
   async getCustomStyle(id: string): Promise<CustomStyle | undefined> {
-    const results: any = await db.execute(
-      sql`SELECT * FROM custom_styles WHERE id = ${id}`
-    );
-    return deepClone(results.rows?.[0]);
+    const { data, error } = await supabase
+      .from("custom_styles")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? rowToStyle(data) : undefined;
   }
 
-  async createCustomStyle(data: CustomStyle): Promise<CustomStyle> {
-    await db.execute(
-      sql`INSERT INTO custom_styles (id, name, org_name, primary_color, accent_color, bg_color, text_color, border_color, font_family, element_icons, is_preset)
-          VALUES (${data.id}, ${data.name}, ${data.orgName}, ${data.primaryColor}, ${data.accentColor}, ${data.bgColor}, ${data.textColor}, ${data.borderColor}, ${data.fontFamily}, ${JSON.stringify(data.elementIcons)}, ${data.isPreset ?? false})`
-    );
-    return data;
+  async createCustomStyle(s: CustomStyle): Promise<CustomStyle> {
+    const payload = {
+      id: s.id,
+      name: s.name,
+      org_name: s.orgName,
+      primary_color: s.primaryColor,
+      accent_color: s.accentColor,
+      bg_color: s.bgColor,
+      text_color: s.textColor,
+      border_color: s.borderColor,
+      font_family: s.fontFamily,
+      element_icons: s.elementIcons ?? {},
+      is_preset: s.isPreset ?? false,
+    };
+    const { error } = await supabase.from("custom_styles").upsert(payload);
+    if (error) throw error;
+    return s;
   }
 
-  async updateCustomStyle(id: string, data: Partial<CustomStyle>): Promise<CustomStyle | undefined> {
+  async updateCustomStyle(id: string, updates: Partial<CustomStyle>): Promise<CustomStyle | undefined> {
     const existing = await this.getCustomStyle(id);
     if (!existing) return undefined;
-
-    const updated = { ...existing, ...data, id };
-    await db.execute(
-      sql`UPDATE custom_styles
-          SET name = ${updated.name},
-              org_name = ${updated.orgName},
-              primary_color = ${updated.primaryColor},
-              accent_color = ${updated.accentColor},
-              bg_color = ${updated.bgColor},
-              text_color = ${updated.textColor},
-              border_color = ${updated.borderColor},
-              font_family = ${updated.fontFamily},
-              element_icons = ${JSON.stringify(updated.elementIcons)},
-              is_preset = ${updated.isPreset ?? false}
-          WHERE id = ${id}`
-    );
-    return updated;
+    const merged = { ...existing, ...updates, id };
+    await this.createCustomStyle(merged);
+    return merged;
   }
 
   async deleteCustomStyle(id: string): Promise<boolean> {
     const existing = await this.getCustomStyle(id);
     if (!existing || existing.isPreset) return false;
-
-    await db.execute(sql`DELETE FROM custom_styles WHERE id = ${id}`);
+    const { error } = await supabase.from("custom_styles").delete().eq("id", id);
+    if (error) throw error;
     return true;
   }
 }
 
-export const storage = new PostgresStorage();
+export const storage = new SupabaseStorage();
 
-// Initialize database with default data if empty
 export async function initializeDatabase() {
   try {
     const diagrams = await storage.getDiagrams();
-
-    // Seed default diagram if none exists
     if (diagrams.length === 0) {
-      await storage.createDiagram({
-        name: "🎨 Welkom bij Praatplaat Studio!",
-        description: "Interactieve demo - Probeer elementen toe te voegen, relaties te tekenen en stijlen te wijzigen. Klik op Assistent voor natuurlijke taal commando's!",
-        style: "corporate",
-        data: {
-          elements: [
-            {
-              id: "e1",
-              type: "actor",
-              label: "Burger",
-              style: "corporate",
-              position: { x: 100, y: 150 },
-              description: "Eindgebruiker die een aanvraag indient"
-            },
-            {
-              id: "e2",
-              type: "application",
-              label: "Digitaal Loket",
-              style: "corporate",
-              position: { x: 350, y: 150 },
-              description: "Online portaal voor burgers"
-            },
-            {
-              id: "e3",
-              type: "process",
-              label: "Aanvraag verwerken",
-              style: "corporate",
-              position: { x: 600, y: 150 },
-              description: "Behandel en beoordeel aanvraag"
-            },
-            {
-              id: "e4",
-              type: "actor",
-              label: "Behandelaar",
-              style: "corporate",
-              position: { x: 850, y: 150 },
-              description: "Gemeentelijk medewerker"
-            },
-            {
-              id: "e5",
-              type: "data",
-              label: "Aanvraagdossier",
-              style: "corporate",
-              position: { x: 350, y: 350 },
-              description: "Opgeslagen aanvraaggegevens"
-            },
-            {
-              id: "e6",
-              type: "system",
-              label: "GBA Koppeling",
-              style: "corporate",
-              position: { x: 600, y: 350 },
-              description: "Basisregistratie Personen verificatie"
-            },
-            {
-              id: "e7",
-              type: "service",
-              label: "Notificatiedienst",
-              style: "corporate",
-              position: { x: 100, y: 350 },
-              description: "Verstuur berichten naar burger"
-            },
-            {
-              id: "e8",
-              type: "decision",
-              label: "Goedkeuren?",
-              style: "corporate",
-              position: { x: 850, y: 350 },
-              description: "Beslispunt: wel/niet goedkeuren"
-            }
-          ],
-          relations: [
-            {
-              id: "r1",
-              type: "uses",
-              label: "dient in via",
-              sourceId: "e1",
-              targetId: "e2"
-            },
-            {
-              id: "r2",
-              type: "triggers",
-              label: "start",
-              sourceId: "e2",
-              targetId: "e3"
-            },
-            {
-              id: "r3",
-              type: "assignment",
-              label: "behandelt",
-              sourceId: "e4",
-              targetId: "e3"
-            },
-            {
-              id: "r4",
-              type: "flows",
-              label: "slaat op in",
-              sourceId: "e2",
-              targetId: "e5"
-            },
-            {
-              id: "r5",
-              type: "uses",
-              label: "raadpleegt",
-              sourceId: "e3",
-              targetId: "e6"
-            },
-            {
-              id: "r6",
-              type: "flows",
-              label: "leidt tot",
-              sourceId: "e3",
-              targetId: "e8"
-            },
-            {
-              id: "r7",
-              type: "triggers",
-              label: "verstuurt via",
-              sourceId: "e8",
-              targetId: "e7"
-            },
-            {
-              id: "r8",
-              type: "flows",
-              label: "ontvangt van",
-              sourceId: "e7",
-              targetId: "e1"
-            }
-          ]
-        },
-        visibleTypes: ["actor","process","application","data","transaction","system","event","decision","service","infrastructure"],
-        visibleRelations: ["uses","triggers","flows","association","realization","composition","aggregation","assignment","access","influence"],
-      });
-      console.log("✓ Demo praatplaat seeded");
+      await storage.createDiagram(DEMO_DIAGRAM);
+      console.log("✓ Demo praatplaat aangemaakt");
     }
-
-    // Seed digiGO preset if it doesn't exist
-    const existingStyle = await storage.getCustomStyle("digigo");
-    if (!existingStyle) {
+    const existing = await storage.getCustomStyle("digigo");
+    if (!existing) {
       await storage.createCustomStyle(DIGIGO_PRESET);
-      console.log("✓ digiGO preset seeded");
+      console.log("✓ digiGO stijl aangemaakt");
     }
   } catch (error) {
-    console.error("Database initialization error:", error);
+    console.error("Database initialisatiefout:", error);
   }
 }

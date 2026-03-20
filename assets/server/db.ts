@@ -1,46 +1,38 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { diagrams, chatMessages } from '@shared/schema';
-import fs from 'fs';
-import path from 'path';
+import { createClient } from "@supabase/supabase-js";
+import fs from "fs";
+import path from "path";
 
-let connectionString = process.env.DATABASE_URL ||
-  process.env.VITE_SUPABASE_DB_URL ||
-  process.env.SUPABASE_DB_URL;
-
-if (!connectionString) {
-  try {
-    const envPath = path.join(process.cwd(), '../.env');
-    if (fs.existsSync(envPath)) {
-      const envContent = fs.readFileSync(envPath, 'utf8');
-      const match = envContent.match(/^DATABASE_URL=(.+)$/m);
-      if (match) {
-        connectionString = match[1].trim();
+function loadEnv() {
+  const candidates = [
+    path.join(process.cwd(), ".env"),
+    path.join(process.cwd(), "../.env"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      const lines = fs.readFileSync(p, "utf8").split("\n");
+      for (const line of lines) {
+        const m = line.match(/^([^#=]+)=(.+)$/);
+        if (m && !process.env[m[1].trim()]) {
+          process.env[m[1].trim()] = m[2].trim();
+        }
       }
     }
-  } catch (e) {
-    // ignore
   }
 }
+loadEnv();
 
-if (!connectionString) {
-  try {
-    const envPath = path.join(process.cwd(), '.env');
-    if (fs.existsSync(envPath)) {
-      const envContent = fs.readFileSync(envPath, 'utf8');
-      const match = envContent.match(/^DATABASE_URL=(.+)$/m);
-      if (match) {
-        connectionString = match[1].trim();
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
+const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const key =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.VITE_SUPABASE_ANON_KEY ||
+  process.env.VITE_SUPABASE_SUPABASE_ANON_KEY;
+
+if (!url || !key) {
+  throw new Error(
+    "Supabase URL or key not configured. Set VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_SUPABASE_ANON_KEY)."
+  );
 }
 
-if (!connectionString) {
-  throw new Error('Database connection string not configured. Set DATABASE_URL environment variable.');
-}
-
-const client = postgres(connectionString);
-export const db = drizzle(client);
+export const supabase = createClient(url, key, {
+  auth: { persistSession: false },
+});
