@@ -16,6 +16,12 @@ const DEFAULT_RELS = [
   "aggregation","assignment","access","influence",
 ];
 
+async function getCurrentUserId(): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Niet ingelogd");
+  return user.id;
+}
+
 function rowToDiagram(row: any): Diagram {
   return {
     id: row.id,
@@ -76,6 +82,7 @@ export async function getDiagram(id: number): Promise<Diagram | null> {
 }
 
 export async function createDiagram(input: InsertDiagram): Promise<Diagram> {
+  const userId = await getCurrentUserId();
   const payload: any = {
     name: input.name,
     description: input.description ?? null,
@@ -83,6 +90,7 @@ export async function createDiagram(input: InsertDiagram): Promise<Diagram> {
     data: input.data,
     visible_types: input.visibleTypes ?? DEFAULT_TYPES,
     visible_relations: input.visibleRelations ?? DEFAULT_RELS,
+    user_id: userId,
   };
   const { data, error } = await supabase
     .from("diagrams")
@@ -170,6 +178,7 @@ export async function getCustomStyle(id: string): Promise<CustomStyle | null> {
 }
 
 export async function upsertCustomStyle(s: CustomStyle): Promise<CustomStyle> {
+  const userId = await getCurrentUserId();
   const payload = {
     id: s.id,
     name: s.name,
@@ -182,6 +191,7 @@ export async function upsertCustomStyle(s: CustomStyle): Promise<CustomStyle> {
     font_family: s.fontFamily,
     element_icons: s.elementIcons ?? {},
     is_preset: s.isPreset ?? false,
+    user_id: userId,
   };
   const { error } = await supabase.from("custom_styles").upsert(payload);
   if (error) throw error;
@@ -191,4 +201,23 @@ export async function upsertCustomStyle(s: CustomStyle): Promise<CustomStyle> {
 export async function deleteCustomStyle(id: string): Promise<void> {
   const { error } = await supabase.from("custom_styles").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function ensureUserHasDiagram(): Promise<number> {
+  const { data, error } = await supabase
+    .from("diagrams")
+    .select("id")
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) return data.id;
+
+  const diagram = await createDiagram({
+    name: "Mijn eerste praatplaat",
+    description: "Mijn eerste diagram",
+    data: { elements: [], relations: [] },
+    style: "corporate",
+  });
+  return diagram.id;
 }

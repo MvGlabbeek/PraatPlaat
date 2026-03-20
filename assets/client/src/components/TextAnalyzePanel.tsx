@@ -7,19 +7,13 @@ import { Wand as Wand2, FileText, CircleCheck as CheckCircle2, CircleAlert as Al
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { analyzeText } from "@/lib/textAnalyzer";
+import type { AnalysisResult } from "@/lib/textAnalyzer";
 import type { DiagramData, CanvasElement, CanvasRelation } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 interface TextAnalyzePanelProps {
   onApply: (data: DiagramData, mode: "vervangen" | "toevoegen") => void;
-}
-
-interface AnalysisResult {
-  elements: CanvasElement[];
-  relations: CanvasRelation[];
-  summary: string;
-  confidence: "hoog" | "gemiddeld" | "laag";
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -73,7 +67,7 @@ export default function TextAnalyzePanel({ onApply }: TextAnalyzePanelProps) {
     setError(null);
     setResult(null);
     try {
-      const data = analyzeText(text);
+      const data = await analyzeText(text);
       if (data.elements.length === 0) {
         setError(data.summary || "Geen elementen gevonden. Probeer een meer beschrijvende tekst.");
       } else {

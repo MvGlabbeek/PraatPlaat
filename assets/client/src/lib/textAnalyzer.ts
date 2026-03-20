@@ -1,123 +1,117 @@
 import type { CanvasElement, CanvasRelation } from "@shared/schema";
 
-interface AnalysisResult {
+export interface AnalysisResult {
   elements: CanvasElement[];
   relations: CanvasRelation[];
   summary: string;
   confidence: "hoog" | "gemiddeld" | "laag";
 }
 
-const ELEMENT_PATTERNS: Record<string, RegExp> = {
-  actor: /medewerker|gebruiker|klant|burger|manager|afdeling|team|organisatie|leverancier|stakeholder|behandelaar|directeur|aanvrager|opdrachtgever|opdrachtnemer|verantwoordelijke|uitvoerder/i,
-  application: /systeem|portaal|platform|applicatie|app|software|database|register|api|module|website/i,
-  data: /dossier|document|formulier|rapport|aanvraag|besluit|contract|data|gegevens|factuur|bericht|email|notitie|beschikking|bestand/i,
-  process: /verwerk|behandel|taak|procedure|workflow|actie|beoordel|registr|analyseer|goedkeur|controle|aanvra/i,
-  service: /dienst|service|product|voorziening|levering/i,
-  event: /event|gebeurtenis|trigger|melding|signaal|alarm|ontvangst|deadline/i,
-  decision: /beslissing|keuze|goedkeuring|afwijzing|afkeuring/i,
-};
-
-function classifyToken(text: string): string {
-  const lower = text.toLowerCase();
-  for (const [type, pattern] of Object.entries(ELEMENT_PATTERNS)) {
-    if (pattern.test(lower)) return type;
-  }
-  if (/[a-z](er|or|eur|aar)$/i.test(lower)) return "actor";
-  if (/[a-z](ing|atie)$/i.test(lower)) return "process";
-  return "system";
+interface AIElement {
+  label: string;
+  type: string;
+  description?: string;
 }
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
+interface AIRelation {
+  sourceLabel: string;
+  targetLabel: string;
+  type: string;
+  label?: string;
 }
 
-export function analyzeText(text: string): AnalysisResult {
-  const lines = text
-    .split(/[\n.!?]+/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 3);
+interface AIResponse {
+  elements: AIElement[];
+  relations: AIRelation[];
+  summary: string;
+  confidence: "hoog" | "gemiddeld" | "laag";
+}
 
-  const elements: CanvasElement[] = [];
-  const relations: CanvasRelation[] = [];
-  const seen = new Map<string, string>();
-  let elIdx = 0;
+const VALID_TYPES = new Set([
+  "actor", "process", "application", "data", "transaction",
+  "system", "event", "decision", "service", "infrastructure",
+]);
 
-  const gridPos = (i: number) => ({
-    x: 80 + (i % 4) * 230,
-    y: 80 + Math.floor(i / 4) * 180,
+const VALID_RELATION_TYPES = new Set([
+  "uses", "triggers", "flows", "association", "realization",
+  "composition", "aggregation", "assignment", "access", "influence",
+]);
+
+function gridPos(i: number) {
+  return { x: 80 + (i % 4) * 230, y: 80 + Math.floor(i / 4) * 180 };
+}
+
+export async function analyzeText(text: string): Promise<AnalysisResult> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  const response = await fetch(`${supabaseUrl}/functions/v1/analyze-text`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${supabaseKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text }),
   });
 
-  const makeId = () =>
-    `txt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${elIdx++}`;
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: "Onbekende fout" }));
+    throw new Error(err.error || `HTTP ${response.status}`);
+  }
 
-  const addEl = (label: string, type: string): string => {
-    const key = label.toLowerCase();
-    if (seen.has(key)) return seen.get(key)!;
-    const id = makeId();
-    seen.set(key, id);
+  const ai: AIResponse = await response.json();
+
+  if ((ai as any).error) {
+    throw new Error((ai as any).error);
+  }
+
+  const elements: CanvasElement[] = [];
+  const labelToId = new Map<string, string>();
+  let idx = 0;
+
+  for (const el of ai.elements ?? []) {
+    const type = VALID_TYPES.has(el.type) ? el.type : "system";
+    const id = `ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${idx++}`;
+    const key = el.label.toLowerCase();
+
+    if (labelToId.has(key)) continue;
+    labelToId.set(key, id);
+
     elements.push({
       id,
       type: type as any,
-      label,
+      label: el.label,
+      description: el.description || "",
       position: gridPos(elements.length),
       style: "corporate",
     });
-    return id;
-  };
+  }
 
-  const addRel = (
-    fromId: string,
-    toId: string,
-    type: string,
-    label?: string,
-  ) => {
-    if (fromId === toId) return;
-    if (relations.find((r) => r.sourceId === fromId && r.targetId === toId))
-      return;
+  const relations: CanvasRelation[] = [];
+  for (const rel of ai.relations ?? []) {
+    const sourceId = labelToId.get(rel.sourceLabel.toLowerCase());
+    const targetId = labelToId.get(rel.targetLabel.toLowerCase());
+    if (!sourceId || !targetId || sourceId === targetId) continue;
+
+    const alreadyExists = relations.some(
+      (r) => r.sourceId === sourceId && r.targetId === targetId,
+    );
+    if (alreadyExists) continue;
+
+    const relType = VALID_RELATION_TYPES.has(rel.type) ? rel.type : "association";
     relations.push({
       id: `rel_${Date.now()}_${relations.length}`,
-      sourceId: fromId,
-      targetId: toId,
-      type: type as any,
-      label,
+      sourceId,
+      targetId,
+      type: relType as any,
+      label: rel.label,
     });
+  }
+
+  return {
+    elements,
+    relations,
+    summary: ai.summary || `${elements.length} elementen en ${relations.length} relaties gevonden.`,
+    confidence: ai.confidence || "gemiddeld",
   };
-
-  lines.forEach((line) => {
-    const svo = line.match(
-      /^([^,]+?)\s+(verwerkt|behandelt|stuurt|ontvangt|registreert|gebruikt|raadpleegt|maakt|beoordeelt|verstuurt|dient|logt|keurt|rapporteert|beheert|leveren|levert|processes|sends|uses|creates|handles)\s+(?:een |de |het |aan )?(.+)/i,
-    );
-    if (svo) {
-      const subLabel = capitalize(svo[1].trim());
-      const objLabel = capitalize(svo[3].trim().replace(/[.,;:!?]$/, ""));
-      const subId = addEl(subLabel, classifyToken(subLabel));
-      const objId = addEl(objLabel, classifyToken(objLabel));
-      addRel(subId, objId, "uses", svo[2].toLowerCase());
-    }
-
-    const passive = line.match(
-      /(?:de |het |een )?([^,]+?)\s+(?:wordt|worden)\s+(verwerkt|behandeld|verstuurd|beoordeeld|geregistreerd|goedgekeurd|afgekeurd|opgeslagen|gebruikt)\s+(?:door|in|via|naar)\s+(?:de |het |een )?([^,]+)/i,
-    );
-    if (passive) {
-      const objLabel = capitalize(passive[1].trim());
-      const subLabel = capitalize(passive[3].trim().replace(/[.,;:!?]$/, ""));
-      const subId = addEl(subLabel, classifyToken(subLabel));
-      const objId = addEl(objLabel, classifyToken(objLabel));
-      addRel(subId, objId, "uses", passive[2].toLowerCase());
-    }
-  });
-
-  const confidence: "hoog" | "gemiddeld" | "laag" =
-    elements.length >= 6
-      ? "gemiddeld"
-      : elements.length >= 3
-        ? "gemiddeld"
-        : "laag";
-
-  const summary =
-    elements.length > 0
-      ? `${elements.length} elementen en ${relations.length} relaties gevonden via tekstanalyse.`
-      : "Geen elementen gevonden. Probeer een meer beschrijvende tekst met duidelijke zinnen (onderwerp-werkwoord-lijdend voorwerp).";
-
-  return { elements, relations, summary, confidence };
 }

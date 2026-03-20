@@ -1,7 +1,9 @@
-import { useState, useCallback, lazy, Suspense } from "react";
+import { useState, useCallback, useEffect, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getDiagram, updateDiagram, createDiagram } from "@/lib/dataService";
+import { getDiagram, updateDiagram, createDiagram, ensureUserHasDiagram } from "@/lib/dataService";
 import { getCustomStyles } from "@/lib/dataService";
+import { useAuth } from "@/lib/authContext";
+import { useLocation } from "wouter";
 import { ReactFlowProvider } from "@xyflow/react";
 import DiagramCanvas from "@/components/DiagramCanvas";
 import ElementPalette from "@/components/ElementPalette";
@@ -17,7 +19,7 @@ const TextAnalyzePanel = lazy(() => import("@/components/TextAnalyzePanel"));
 import type { Diagram, DiagramData, CanvasElement, CanvasRelation, ElementType, VisualStyle, CustomStyle } from "@shared/schema";
 import { VISUAL_STYLES, getStyleConfig } from "@/lib/elementConfig";
 import { useToast } from "@/hooks/use-toast";
-import { Layers, MessageSquare, Download, Settings, Save, RotateCcw, Pencil, List, ChevronLeft, ChevronRight, Upload, Wand as Wand2 } from "lucide-react";
+import { Layers, MessageSquare, Download, Settings, Save, RotateCcw, Pencil, List, ChevronLeft, ChevronRight, Upload, Wand as Wand2, User, LogOut, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger
@@ -30,8 +32,11 @@ type RightTab = "chat" | "properties" | "analyze";
 export default function EditorPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { profile, isAdmin, signOut } = useAuth();
+  const [, setLocation] = useLocation();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  const [activeDiagramId, setActiveDiagramId] = useState<number>(1);
+  const [activeDiagramId, setActiveDiagramId] = useState<number | null>(null);
   const [localData, setLocalData] = useState<DiagramData | null>(null);
   const [selectedElement, setSelectedElement] = useState<CanvasElement | null>(null);
   const [leftTab, setLeftTab] = useState<SidebarTab>("elements");
@@ -39,6 +44,14 @@ export default function EditorPage() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
+  const [initLoading, setInitLoading] = useState(true);
+
+  useEffect(() => {
+    ensureUserHasDiagram()
+      .then((id) => setActiveDiagramId(id))
+      .catch(() => {})
+      .finally(() => setInitLoading(false));
+  }, []);
 
   const { data: customStyles = [] } = useQuery<CustomStyle[]>({
     queryKey: ["custom-styles"],
@@ -47,8 +60,8 @@ export default function EditorPage() {
 
   const { data: diagram, isLoading } = useQuery<Diagram | null>({
     queryKey: ["diagrams", activeDiagramId],
-    queryFn: () => getDiagram(activeDiagramId),
-    enabled: !!activeDiagramId,
+    queryFn: () => getDiagram(activeDiagramId!),
+    enabled: activeDiagramId != null,
   });
 
   const effectiveData: DiagramData = localData ?? (diagram?.data as DiagramData) ?? { elements: [], relations: [] };
@@ -63,6 +76,7 @@ export default function EditorPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (activeDiagramId == null) return;
       await updateDiagram(activeDiagramId, { data: effectiveData });
     },
     onSuccess: () => {
@@ -74,6 +88,7 @@ export default function EditorPage() {
 
   const updateSettings = useMutation({
     mutationFn: async (updates: Partial<Diagram>) => {
+      if (activeDiagramId == null) return;
       await updateDiagram(activeDiagramId, updates);
     },
     onSuccess: () => {
@@ -242,7 +257,7 @@ export default function EditorPage() {
     { id: "export", icon: Download, label: "Exporteren" },
   ];
 
-  if (isLoading) {
+  if (isLoading || initLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-3">
@@ -317,6 +332,53 @@ export default function EditorPage() {
               </TooltipTrigger>
               <TooltipContent side="bottom">Wijzigingen ongedaan maken</TooltipContent>
             </Tooltip>
+
+            <div className="relative ml-1.5">
+              <button
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary/20 transition-colors"
+              >
+                <span className="text-[10px] font-semibold">
+                  {profile?.username?.charAt(0).toUpperCase() ?? "U"}
+                </span>
+              </button>
+              {userMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
+                  <div className="absolute right-0 top-9 z-50 bg-card border rounded-lg shadow-lg py-1 w-48">
+                    <div className="px-3 py-2 border-b">
+                      <p className="text-xs font-medium truncate">{profile?.username}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{profile?.email}</p>
+                    </div>
+                    <button
+                      onClick={() => { setUserMenuOpen(false); setLocation("/profile"); }}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-muted flex items-center gap-2"
+                    >
+                      <User size={12} />
+                      Mijn Profiel
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => { setUserMenuOpen(false); setLocation("/admin"); }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-muted flex items-center gap-2"
+                      >
+                        <Shield size={12} />
+                        Gebruikersbeheer
+                      </button>
+                    )}
+                    <div className="border-t mt-1 pt-1">
+                      <button
+                        onClick={() => { setUserMenuOpen(false); signOut(); }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-muted flex items-center gap-2 text-destructive"
+                      >
+                        <LogOut size={12} />
+                        Uitloggen
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -475,7 +537,7 @@ export default function EditorPage() {
 
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Laden...</div>}>
-                    {rightTab === "chat" && diagram && (
+                    {rightTab === "chat" && diagram && activeDiagramId != null && (
                       <ChatPanel
                         diagramId={activeDiagramId}
                         currentData={effectiveData}
