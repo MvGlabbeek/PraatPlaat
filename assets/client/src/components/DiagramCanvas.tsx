@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useEffect } from "react";
 import {
   ReactFlow, Background, Controls, MiniMap,
   addEdge, useNodesState, useEdgesState,
@@ -112,9 +112,22 @@ export default function DiagramCanvas({
   onElementSelect,
   selectedElementId,
 }: DiagramCanvasProps) {
-  const nodes = toFlowNodes(elements, visibleTypes, selectedElementId, activeStyle, customStyleConfig);
-  const edges = toFlowEdges(relations, visibleRelations, activeStyle);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
+
+  // Use ReactFlow's internal state management
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
+
+  // Sync props to internal state
+  useEffect(() => {
+    const newNodes = toFlowNodes(elements, visibleTypes, selectedElementId, activeStyle, customStyleConfig);
+    setNodes(newNodes);
+  }, [elements, visibleTypes, selectedElementId, activeStyle, customStyleConfig, setNodes]);
+
+  useEffect(() => {
+    const newEdges = toFlowEdges(relations, visibleRelations, activeStyle);
+    setEdges(newEdges);
+  }, [relations, visibleRelations, activeStyle, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -191,6 +204,8 @@ export default function DiagramCanvas({
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
