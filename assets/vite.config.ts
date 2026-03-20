@@ -15,7 +15,7 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
-    emptyOutDir: false,
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         manualChunks: {
@@ -29,6 +29,7 @@ export default defineConfig({
   server: {
     port: 5000,
     host: '0.0.0.0',
+    allowedHosts: true,
     fs: {
       strict: true,
       deny: ["**/.*"],

@@ -1,17 +1,19 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Trash2 } from "lucide-react";
+import { Send, Bot, User } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { getChatMessages, addChatMessage } from "@/lib/dataService";
+import { processChatCommand } from "@/lib/chatCommands";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import type { DiagramData } from "@shared/schema";
+import type { DiagramData, CanvasElement, CanvasRelation } from "@shared/schema";
 
 interface ChatPanelProps {
   diagramId: number;
+  currentData: DiagramData;
   onDiagramDataChange: (ops: any[]) => void;
 }
 
-interface ChatMessage {
+interface ChatMsg {
   id: number;
   role: "user" | "assistant";
   content: string;
@@ -26,24 +28,26 @@ const SUGGESTIONS = [
   "Voeg een systeem 'Email Server' toe",
 ];
 
-export default function ChatPanel({ diagramId, onDiagramDataChange }: ChatPanelProps) {
+export default function ChatPanel({ diagramId, currentData, onDiagramDataChange }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
-  const { data: messages = [] } = useQuery<ChatMessage[]>({
-    queryKey: ["/api/diagrams", diagramId, "chat"],
-    queryFn: () => apiRequest("GET", `/api/diagrams/${diagramId}/chat`).then(r => r.json()),
+  const { data: messages = [] } = useQuery<ChatMsg[]>({
+    queryKey: ["chat", diagramId],
+    queryFn: () => getChatMessages(diagramId) as Promise<ChatMsg[]>,
   });
 
   const sendMutation = useMutation({
     mutationFn: async (message: string) => {
-      const res = await apiRequest("POST", `/api/diagrams/${diagramId}/chat`, { message });
-      return res.json();
+      await addChatMessage(diagramId, "user", message);
+      const result = processChatCommand(message, currentData);
+      await addChatMessage(diagramId, "assistant", result.reply);
+      return result;
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/diagrams", diagramId, "chat"] });
-      if (data.operations?.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ["chat", diagramId] });
+      if (data.operations && data.operations.length > 0) {
         onDiagramDataChange(data.operations);
       }
     },
@@ -69,14 +73,12 @@ export default function ChatPanel({ diagramId, onDiagramDataChange }: ChatPanelP
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="px-3 py-2.5 border-b flex items-center gap-2">
         <Bot size={14} className="text-primary" />
         <span className="text-xs font-semibold">Praatplaat Assistent</span>
         <div className={`ml-auto w-2 h-2 rounded-full ${sendMutation.isPending ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`} />
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {messages.length === 0 && (
           <div className="text-center py-6">
@@ -141,7 +143,6 @@ export default function ChatPanel({ diagramId, onDiagramDataChange }: ChatPanelP
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
       <div className="p-3 border-t space-y-2">
         <div className="flex gap-1.5">
           <Textarea
@@ -164,7 +165,7 @@ export default function ChatPanel({ diagramId, onDiagramDataChange }: ChatPanelP
           </Button>
         </div>
         <p className="text-[10px] text-muted-foreground text-center">
-          Typ: "Voeg een actor X toe" · "Maak een applicatie Y" · "Verbind X met Y"
+          Typ: "Voeg een actor X toe" - "Maak een applicatie Y" - "Verbind X met Y"
         </p>
       </div>
     </div>

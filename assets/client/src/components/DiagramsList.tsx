@@ -1,6 +1,6 @@
-import { Plus, Trash2, Edit3, FolderOpen } from "lucide-react";
+import { Plus, Trash2, FolderOpen } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { getDiagrams, createDiagram, deleteDiagram } from "@/lib/dataService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Diagram } from "@shared/schema";
@@ -19,13 +19,13 @@ export default function DiagramsList({ activeDiagramId, onSelectDiagram }: Diagr
   const [creating, setCreating] = useState(false);
 
   const { data: diagrams = [], isLoading } = useQuery<Diagram[]>({
-    queryKey: ["/api/diagrams"],
-    queryFn: () => apiRequest("GET", "/api/diagrams").then(r => r.json()),
+    queryKey: ["diagrams"],
+    queryFn: getDiagrams,
   });
 
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
-      const res = await apiRequest("POST", "/api/diagrams", {
+      return createDiagram({
         name,
         description: "",
         style: "corporate",
@@ -33,10 +33,9 @@ export default function DiagramsList({ activeDiagramId, onSelectDiagram }: Diagr
         visibleTypes: ["actor","process","application","data","transaction","system","event","decision","service","infrastructure"],
         visibleRelations: ["uses","triggers","flows","association","realization","composition","aggregation","assignment","access","influence"],
       });
-      return res.json();
     },
     onSuccess: (diagram: Diagram) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/diagrams"] });
+      queryClient.invalidateQueries({ queryKey: ["diagrams"] });
       onSelectDiagram(diagram.id);
       setCreating(false);
       setNewName("");
@@ -46,10 +45,11 @@ export default function DiagramsList({ activeDiagramId, onSelectDiagram }: Diagr
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/diagrams/${id}`);
+      await deleteDiagram(id);
+      return id;
     },
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/diagrams"] });
+    onSuccess: (id) => {
+      queryClient.invalidateQueries({ queryKey: ["diagrams"] });
       if (activeDiagramId === id) onSelectDiagram(diagrams.find(d => d.id !== id)?.id ?? 0);
       toast({ title: "Praatplaat verwijderd" });
     },

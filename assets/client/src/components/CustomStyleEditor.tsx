@@ -7,12 +7,13 @@
  * - digiGO preset als startpunt
  */
 import { useState, useRef, useCallback } from "react";
-import { X, Upload, Trash2, Plus, RefreshCw, Check } from "lucide-react";
+import { X, Upload, Trash2, RefreshCw, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CustomStyle } from "@shared/schema";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { upsertCustomStyle } from "@/lib/dataService";
+import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 const ELEMENT_TYPE_LABELS: Record<string, string> = {
@@ -148,13 +149,8 @@ export default function CustomStyleEditor({ editing, onClose, onSaved }: Props) 
         id: form.id || slugify(form.name),
         orgName: form.orgName || form.name,
       };
-      let saved: CustomStyle;
-      if (isEdit) {
-        saved = await apiRequest("PATCH", `/api/custom-styles/${payload.id}`, payload).then(r => r.json());
-      } else {
-        saved = await apiRequest("POST", "/api/custom-styles", payload).then(r => r.json());
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/custom-styles"] });
+      const saved = await upsertCustomStyle(payload);
+      queryClient.invalidateQueries({ queryKey: ["custom-styles"] });
       onSaved(saved);
       toast({ title: "Stijl opgeslagen", description: `"${saved.name}" is bewaard.` });
     } catch (e) {

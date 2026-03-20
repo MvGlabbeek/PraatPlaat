@@ -3,13 +3,10 @@
  * De analyser destilleert actoren, processen, systemen en relaties uit de tekst.
  */
 import { useState } from "react";
-import {
-  Wand2, FileText, CheckCircle2, AlertCircle, X, RefreshCw,
-  ChevronDown, ChevronUp, Sparkles, Info
-} from "lucide-react";
+import { Wand as Wand2, FileText, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, X, RefreshCw, ChevronDown, ChevronUp, Sparkles, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { apiRequest } from "@/lib/queryClient";
+import { analyzeText } from "@/lib/textAnalyzer";
 import type { DiagramData, CanvasElement, CanvasRelation } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -76,8 +73,7 @@ export default function TextAnalyzePanel({ onApply }: TextAnalyzePanelProps) {
     setError(null);
     setResult(null);
     try {
-      const res = await apiRequest("POST", "/api/analyze-text", { text });
-      const data: AnalysisResult = await res.json();
+      const data = analyzeText(text);
       if (data.elements.length === 0) {
         setError(data.summary || "Geen elementen gevonden. Probeer een meer beschrijvende tekst.");
       } else {

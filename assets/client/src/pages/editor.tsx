@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, lazy, Suspense } from "react";
+import { useState, useCallback, lazy, Suspense } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { getDiagram, updateDiagram, createDiagram } from "@/lib/dataService";
+import { getCustomStyles } from "@/lib/dataService";
 import { ReactFlowProvider } from "@xyflow/react";
 import DiagramCanvas from "@/components/DiagramCanvas";
 import ElementPalette from "@/components/ElementPalette";
@@ -16,14 +17,13 @@ const TextAnalyzePanel = lazy(() => import("@/components/TextAnalyzePanel"));
 import type { Diagram, DiagramData, CanvasElement, CanvasRelation, ElementType, VisualStyle, CustomStyle } from "@shared/schema";
 import { VISUAL_STYLES, getStyleConfig } from "@/lib/elementConfig";
 import { useToast } from "@/hooks/use-toast";
-import { Layers, MessageSquare, Download, Settings, PanelLeft, Save, RotateCcw, Pencil, List, ChevronLeft, ChevronRight, Upload, Wand as Wand2 } from "lucide-react";
+import { Layers, MessageSquare, Download, Settings, Save, RotateCcw, Pencil, List, ChevronLeft, ChevronRight, Upload, Wand as Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger
 } from "@/components/ui/tooltip";
 import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 
-// ---- Sidebar tab types ----
 type SidebarTab = "diagrams" | "elements" | "relations" | "style" | "import" | "export";
 type RightTab = "chat" | "properties" | "analyze";
 
@@ -40,25 +40,22 @@ export default function EditorPage() {
   const [rightOpen, setRightOpen] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
 
-  // Custom stijlen ophalen
   const { data: customStyles = [] } = useQuery<CustomStyle[]>({
-    queryKey: ["/api/custom-styles"],
-    queryFn: () => apiRequest("GET", "/api/custom-styles").then(r => r.json()),
+    queryKey: ["custom-styles"],
+    queryFn: getCustomStyles,
   });
 
-  const { data: diagram, isLoading } = useQuery<Diagram>({
-    queryKey: ["/api/diagrams", activeDiagramId],
-    queryFn: () => apiRequest("GET", `/api/diagrams/${activeDiagramId}`).then(r => r.json()),
+  const { data: diagram, isLoading } = useQuery<Diagram | null>({
+    queryKey: ["diagrams", activeDiagramId],
+    queryFn: () => getDiagram(activeDiagramId),
     enabled: !!activeDiagramId,
   });
 
-  // Merge server data with local edits
   const effectiveData: DiagramData = localData ?? (diagram?.data as DiagramData) ?? { elements: [], relations: [] };
   const activeStyle: string = (diagram?.style as string) ?? "corporate";
   const visibleTypes: string[] = diagram?.visibleTypes ?? [];
   const visibleRelations: string[] = diagram?.visibleRelations ?? [];
 
-  // Bepaal of activeStyle een custom stijl is en haal de config op
   const isBuiltinStyle = VISUAL_STYLES.some(s => s.id === activeStyle);
   const activeCustomStyle: CustomStyle | null = isBuiltinStyle
     ? null
@@ -66,10 +63,10 @@ export default function EditorPage() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("PATCH", `/api/diagrams/${activeDiagramId}`, { data: effectiveData });
+      await updateDiagram(activeDiagramId, { data: effectiveData });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/diagrams", activeDiagramId] });
+      queryClient.invalidateQueries({ queryKey: ["diagrams", activeDiagramId] });
       setIsDirty(false);
       toast({ title: "Opgeslagen", description: "Praatplaat is bewaard" });
     },
@@ -77,10 +74,10 @@ export default function EditorPage() {
 
   const updateSettings = useMutation({
     mutationFn: async (updates: Partial<Diagram>) => {
-      await apiRequest("PATCH", `/api/diagrams/${activeDiagramId}`, updates);
+      await updateDiagram(activeDiagramId, updates);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/diagrams", activeDiagramId] });
+      queryClient.invalidateQueries({ queryKey: ["diagrams", activeDiagramId] });
     },
   });
 
@@ -143,7 +140,6 @@ export default function EditorPage() {
 
   const handleStyleChange = (style: string) => {
     updateSettings.mutate({ style });
-    // Also update all existing element styles
     const updatedElements = effectiveData.elements.map(e => ({ ...e, style }));
     markDirty({ ...effectiveData, elements: updatedElements });
   };
@@ -186,46 +182,40 @@ export default function EditorPage() {
     markDirty({ ...effectiveData, elements });
   };
 
-  // Add onLabelChange callback to element data
   const elementsWithCallback = effectiveData.elements.map(e => ({
     ...e,
     onLabelChange: handleLabelChange,
   }));
 
-  // Import handler: maak een nieuw diagram van geïmporteerde data
   const handleImport = async (data: DiagramData, name: string) => {
     try {
-      const res = await apiRequest("POST", "/api/diagrams", {
+      const created = await createDiagram({
         name,
-        description: `Geïmporteerd op ${new Date().toLocaleDateString("nl-NL")}`,
+        description: `Geimporteerd op ${new Date().toLocaleDateString("nl-NL")}`,
         style: "corporate",
         data,
         visibleTypes: ["actor","process","application","data","transaction","system","event","decision","service","infrastructure"],
         visibleRelations: ["uses","triggers","flows","association","realization","composition","aggregation","assignment","access","influence"],
       });
-      const created = await res.json();
-      queryClient.invalidateQueries({ queryKey: ["/api/diagrams"] });
+      queryClient.invalidateQueries({ queryKey: ["diagrams"] });
       setActiveDiagramId(created.id);
       setLocalData(null);
       setLeftTab("elements");
-      toast({ title: `"${name}" geïmporteerd`, description: `${data.elements.length} elementen, ${data.relations.length} relaties` });
+      toast({ title: `"${name}" geimporteerd`, description: `${data.elements.length} elementen, ${data.relations.length} relaties` });
     } catch (e) {
       toast({ title: "Import mislukt", description: String(e), variant: "destructive" });
     }
   };
 
-  // Tekst-analyse handler: voeg elementen toe of vervang
   const handleTextAnalysis = (data: DiagramData, mode: "vervangen" | "toevoegen") => {
     if (mode === "vervangen") {
       markDirty(data);
       toast({ title: "Praatplaat vervangen", description: `${data.elements.length} elementen toegepast` });
     } else {
-      // Voeg toe, vermijd duplicaten op label
       const existingLabels = new Set(effectiveData.elements.map(e => e.label.toLowerCase()));
       const newElements = data.elements.filter(e => !existingLabels.has(e.label.toLowerCase()));
-      // Verschuif posities zodat ze niet overlappen
       const offset = effectiveData.elements.length;
-      const shiftedElements = newElements.map((e, i) => ({
+      const shiftedElements = newElements.map((e) => ({
         ...e,
         position: { x: e.position.x, y: e.position.y + Math.floor(offset / 4) * 180 },
       }));
@@ -240,7 +230,7 @@ export default function EditorPage() {
       });
       toast({ title: "Elementen toegevoegd", description: `${shiftedElements.length} nieuwe elementen` });
     }
-    setRightTab("chat"); // ga terug naar assistent
+    setRightTab("chat");
   };
 
   const LEFT_TABS: { id: SidebarTab; icon: React.ComponentType<any>; label: string }[] = [
@@ -266,9 +256,7 @@ export default function EditorPage() {
   return (
     <TooltipProvider>
       <div className="h-screen flex flex-col bg-background overflow-hidden" data-testid="editor-root">
-        {/* Top bar */}
         <header className="h-12 border-b bg-card flex items-center px-3 gap-3 flex-shrink-0 z-10">
-          {/* Logo */}
           <div className="flex items-center gap-2 mr-2">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-label="Praatplaat Studio" className="text-primary">
               <rect x="2" y="2" width="9" height="9" rx="2" fill="currentColor" opacity="0.9"/>
@@ -279,15 +267,14 @@ export default function EditorPage() {
             <span className="font-semibold text-sm hidden sm:block">Praatplaat Studio</span>
           </div>
 
-          {/* Diagram name */}
           <div className="flex-1 min-w-0">
             {diagram && (
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">{diagram.name}</span>
-<span className="text-[10px] text-muted-foreground hidden md:block">
+                <span className="text-[10px] text-muted-foreground hidden md:block">
                   {isBuiltinStyle
                     ? `${getStyleConfig(activeStyle as VisualStyle).emoji} ${getStyleConfig(activeStyle as VisualStyle).name}`
-                    : (activeCustomStyle ? `🏢 ${activeCustomStyle.name}` : activeStyle)
+                    : (activeCustomStyle ? `${activeCustomStyle.name}` : activeStyle)
                   }
                 </span>
                 {isDirty && (
@@ -297,7 +284,6 @@ export default function EditorPage() {
             )}
           </div>
 
-          {/* Actions */}
           <div className="flex items-center gap-1.5">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -334,11 +320,8 @@ export default function EditorPage() {
           </div>
         </header>
 
-        {/* Main layout */}
         <div className="flex flex-1 min-h-0">
-          {/* Left sidebar */}
           <div className="flex flex-shrink-0 border-r bg-card">
-            {/* Icon bar */}
             <div className="w-9 flex flex-col items-center py-2 gap-0.5 border-r">
               {LEFT_TABS.map(tab => (
                 <Tooltip key={tab.id}>
@@ -370,7 +353,6 @@ export default function EditorPage() {
               </button>
             </div>
 
-            {/* Panel content */}
             {leftOpen && (
               <div className="w-52 overflow-y-auto">
                 <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Laden...</div>}>
@@ -414,11 +396,10 @@ export default function EditorPage() {
             )}
           </div>
 
-          {/* Canvas */}
           <div className="flex-1 min-w-0 relative" data-testid="canvas-area">
             {diagram ? (
               <ReactFlowProvider>
-<DiagramCanvas
+                <DiagramCanvas
                   elements={elementsWithCallback as CanvasElement[]}
                   relations={effectiveData.relations}
                   visibleTypes={visibleTypes}
@@ -437,7 +418,6 @@ export default function EditorPage() {
               </div>
             )}
 
-            {/* Canvas hint overlay */}
             {diagram && effectiveData.elements.length === 0 && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center space-y-2 opacity-40">
@@ -451,12 +431,9 @@ export default function EditorPage() {
             )}
           </div>
 
-          {/* Right sidebar */}
           <div className="flex flex-shrink-0 border-l bg-card">
-            {/* Panel content */}
             {rightOpen && (
               <div className="w-60 flex flex-col border-r overflow-hidden">
-                {/* Tabs */}
                 <div className="flex border-b flex-shrink-0">
                   <button
                     data-testid="right-tab-chat"
@@ -501,6 +478,7 @@ export default function EditorPage() {
                     {rightTab === "chat" && diagram && (
                       <ChatPanel
                         diagramId={activeDiagramId}
+                        currentData={effectiveData}
                         onDiagramDataChange={handleChatOps}
                       />
                     )}
@@ -530,7 +508,6 @@ export default function EditorPage() {
               </div>
             )}
 
-            {/* Icon bar */}
             <div className="w-9 flex flex-col items-center py-2 gap-0.5">
               <button
                 onClick={() => setRightOpen(!rightOpen)}
@@ -590,7 +567,6 @@ export default function EditorPage() {
           </div>
         </div>
 
-        {/* Attribution footer */}
         <div className="border-t px-3 py-1 flex justify-end">
           <PerplexityAttribution />
         </div>

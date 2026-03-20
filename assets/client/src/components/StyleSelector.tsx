@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { VISUAL_STYLES } from "@/lib/elementConfig";
 import type { CustomStyle } from "@shared/schema";
 import { cn } from "@/lib/utils";
-import { Plus, Pencil, Trash2, Building2, Star } from "lucide-react";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Plus, Pencil, Trash2, Star } from "lucide-react";
+import { getCustomStyles, deleteCustomStyle } from "@/lib/dataService";
 import { useToast } from "@/hooks/use-toast";
 import CustomStyleEditor from "./CustomStyleEditor";
 
@@ -15,18 +15,19 @@ interface StyleSelectorProps {
 
 export default function StyleSelector({ activeStyle, onStyleChange }: StyleSelectorProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingStyle, setEditingStyle] = useState<CustomStyle | null>(null);
 
   const { data: customStyles = [] } = useQuery<CustomStyle[]>({
-    queryKey: ["/api/custom-styles"],
-    queryFn: () => apiRequest("GET", "/api/custom-styles").then(r => r.json()),
+    queryKey: ["custom-styles"],
+    queryFn: getCustomStyles,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/custom-styles/${id}`).then(r => r.json()),
+    mutationFn: (id: string) => deleteCustomStyle(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/custom-styles"] });
+      queryClient.invalidateQueries({ queryKey: ["custom-styles"] });
       toast({ title: "Stijl verwijderd" });
     },
   });
