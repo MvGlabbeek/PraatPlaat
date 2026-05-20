@@ -40,11 +40,16 @@ export default function EditorPage() {
   const [localData, setLocalData] = useState<DiagramData | null>(null);
   const [selectedElement, setSelectedElement] = useState<CanvasElement | null>(null);
   const [leftTab, setLeftTab] = useState<SidebarTab>("elements");
-  const [rightTab, setRightTab] = useState<RightTab>("chat");
+  const [openRightPanel, setOpenRightPanel] = useState<RightTab | null>(null);
   const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
   const [isDirty, setIsDirty] = useState(false);
   const [initLoading, setInitLoading] = useState(true);
+
+  const toggleRightPanel = (tab: RightTab) => {
+    setOpenRightPanel(prev => prev === tab ? null : tab);
+  };
+
+  const closeRightPanel = () => setOpenRightPanel(null);
 
   useEffect(() => {
     ensureUserHasDiagram()
@@ -118,7 +123,11 @@ export default function EditorPage() {
 
   const handleElementSelect = (element: CanvasElement | null) => {
     setSelectedElement(element);
-    if (element) setRightTab("properties");
+    if (element) {
+      setOpenRightPanel("properties");
+    } else {
+      closeRightPanel();
+    }
   };
 
   const handleAddElement = useCallback((type: ElementType) => {
@@ -245,7 +254,7 @@ export default function EditorPage() {
       });
       toast({ title: "Elementen toegevoegd", description: `${shiftedElements.length} nieuwe elementen` });
     }
-    setRightTab("chat");
+    setOpenRightPanel("chat");
   };
 
   const LEFT_TABS: { id: SidebarTab; icon: React.ComponentType<any>; label: string }[] = [
@@ -491,71 +500,39 @@ export default function EditorPage() {
                 </div>
               </div>
             )}
-          </div>
 
-          <div className="flex flex-shrink-0 border-l bg-card">
-            {rightOpen && (
-              <div className="w-60 flex flex-col border-r overflow-hidden">
-                <div className="flex border-b flex-shrink-0">
-                  <button
-                    data-testid="right-tab-chat"
-                    onClick={() => setRightTab("chat")}
-                    className={`flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                      rightTab === "chat"
-                        ? "text-primary border-b-2 border-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <MessageSquare size={12} />
-                    Assistent
-                  </button>
-                  <button
-                    data-testid="right-tab-properties"
-                    onClick={() => setRightTab("properties")}
-                    className={`flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                      rightTab === "properties"
-                        ? "text-primary border-b-2 border-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Settings size={12} />
-                    Eigenschappen
-                  </button>
-                  <button
-                    data-testid="right-tab-analyze"
-                    onClick={() => setRightTab("analyze")}
-                    className={`flex-1 py-2 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                      rightTab === "analyze"
-                        ? "text-primary border-b-2 border-primary"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Wand2 size={12} />
-                    Analyseren
-                  </button>
-                </div>
-
-                <div className="flex-1 min-h-0 overflow-hidden">
+            {/* Slide-out panels from the right */}
+            <div
+              className={`absolute top-0 right-0 h-full flex transition-transform duration-250 ease-in-out z-20 ${
+                openRightPanel ? "translate-x-0" : "translate-x-full"
+              }`}
+            >
+              <div
+                className="bg-card border-l shadow-lg flex flex-col overflow-hidden"
+                style={{ width: openRightPanel === "chat" ? 320 : openRightPanel === "properties" ? 300 : openRightPanel === "analyze" ? 320 : 300 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex-1 min-h-0 overflow-hidden relative">
                   <Suspense fallback={<div className="p-4 text-xs text-muted-foreground">Laden...</div>}>
-                    {rightTab === "chat" && diagram && activeDiagramId != null && (
+                    {openRightPanel === "chat" && diagram && activeDiagramId != null && (
                       <ChatPanel
                         diagramId={activeDiagramId}
                         currentData={effectiveData}
                         onDiagramDataChange={handleChatOps}
                       />
                     )}
-                    {rightTab === "analyze" && diagram && (
+                    {openRightPanel === "analyze" && diagram && (
                       <TextAnalyzePanel onApply={handleTextAnalysis} />
                     )}
-                    {rightTab === "properties" && selectedElement ? (
+                    {openRightPanel === "properties" && selectedElement ? (
                       <ElementPropertiesPanel
                         element={selectedElement}
                         activeStyle={activeStyle}
                         onUpdate={handleUpdateElement}
                         onDelete={handleDeleteElement}
-                        onClose={() => setSelectedElement(null)}
+                        onClose={() => { setSelectedElement(null); closeRightPanel(); }}
                       />
-                    ) : rightTab === "properties" && (
+                    ) : openRightPanel === "properties" && (
                       <div className="h-full flex items-center justify-center p-4 text-center">
                         <div className="space-y-2">
                           <Settings size={24} className="mx-auto text-muted-foreground/30" />
@@ -568,64 +545,59 @@ export default function EditorPage() {
                   </Suspense>
                 </div>
               </div>
-            )}
-
-            <div className="w-9 flex flex-col items-center py-2 gap-0.5">
-              <button
-                onClick={() => setRightOpen(!rightOpen)}
-                className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                {rightOpen ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
-              </button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    data-testid="right-icon-chat"
-                    onClick={() => { setRightTab("chat"); setRightOpen(true); }}
-                    className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
-                      rightTab === "chat" && rightOpen
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    <MessageSquare size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left">Assistent</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    data-testid="right-icon-props"
-                    onClick={() => { setRightTab("properties"); setRightOpen(true); }}
-                    className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
-                      rightTab === "properties" && rightOpen
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    <Settings size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left">Eigenschappen</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    data-testid="right-icon-analyze"
-                    onClick={() => { setRightTab("analyze"); setRightOpen(true); }}
-                    className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
-                      rightTab === "analyze" && rightOpen
-                        ? "bg-accent text-accent-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    <Wand2 size={14} />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="left">Tekst analyseren</TooltipContent>
-              </Tooltip>
             </div>
+          </div>
+
+          {/* Right tab strip */}
+          <div className="w-10 flex-shrink-0 border-l bg-card flex flex-col items-center py-2 gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  data-testid="right-icon-chat"
+                  onClick={() => toggleRightPanel("chat")}
+                  className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                    openRightPanel === "chat"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <MessageSquare size={15} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Assistent</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  data-testid="right-icon-props"
+                  onClick={() => toggleRightPanel("properties")}
+                  className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                    openRightPanel === "properties"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Settings size={15} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Eigenschappen</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  data-testid="right-icon-analyze"
+                  onClick={() => toggleRightPanel("analyze")}
+                  className={`w-8 h-8 rounded-md flex items-center justify-center transition-colors ${
+                    openRightPanel === "analyze"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Wand2 size={15} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="left">Tekst analyseren</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
