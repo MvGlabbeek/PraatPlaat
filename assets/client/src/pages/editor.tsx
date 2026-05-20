@@ -123,11 +123,7 @@ export default function EditorPage() {
 
   const handleElementSelect = (element: CanvasElement | null) => {
     setSelectedElement(element);
-    if (element) {
-      setOpenRightPanel("properties");
-    } else {
-      closeRightPanel();
-    }
+    if (element) setOpenRightPanel("properties");
   };
 
   const handleAddElement = useCallback((type: ElementType) => {
@@ -467,7 +463,7 @@ export default function EditorPage() {
             )}
           </div>
 
-          <div className="flex-1 min-w-0 relative" data-testid="canvas-area">
+          <div className="flex-1 min-w-0 relative overflow-hidden" data-testid="canvas-area">
             {diagram ? (
               <ReactFlowProvider>
                 <DiagramCanvas
